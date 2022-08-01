@@ -5,7 +5,7 @@ from redis import Sentinel
 from kubernetes import client, config
 
 logging.basicConfig(
-    level=logging.DEBUG, 
+    level=logging.INFO, 
     format="%(created)f %(asctime)s.%(msecs)03d [%(process)d] "
         "[%(name)s::%(module)s:%(funcName)s:%(lineno)d] "
         "%(levelname)s: %(message)s"
@@ -14,10 +14,10 @@ logging.basicConfig(
 SENTINEL_NAME = os.getenv('SENTINEL_NAME', 'localhost')
 SENTINEL_PORT = int(os.getenv('SENTINEL_PORT', 26379))
 MASTER_SET_NAME = os.getenv('MASTER_SET_NAME', 'mymaster')
-# сменить тест на default
-NAMESPACE = os.getenv('NAMESPACE', 'test')
+NAMESPACE = os.getenv('NAMESPACE', 'default')
 SERVICE_NAME = os.getenv('SERVICE_NAME', 'redis-bitnami-master')
 KUBECONFIG = os.getenv('KUBECONFIG', '/code/config/kubeconfig')
+SLEEP_TIME = int(os.getenv('SLEEP_TIME', 10))
 
 logging.info('load kube config')
 config.load_kube_config(config_file=KUBECONFIG)
@@ -30,7 +30,7 @@ while True:
     sentinel = Sentinel([(SENTINEL_NAME, SENTINEL_PORT)], socket_timeout=0.5)
     try:
         redis_master_name = sentinel.discover_master(MASTER_SET_NAME)[0]
-        logging.info(f'redis_master_name is {redis_master_name}')
+        # logging.info(f'redis_master_name is {redis_master_name}')
     except Exception as e:
         logging.info(e)
     
@@ -45,10 +45,10 @@ while True:
     if service_exist == True:
         service = v1.read_namespaced_service(name = SERVICE_NAME, namespace = NAMESPACE)
         external_name = service.spec.external_name
-        logging.info(f'Service ExternalName is {external_name}')
+        # logging.info(f'Service ExternalName is {external_name}')
 
     if service_exist == False:
-        logging.info(f'Update service {SERVICE_NAME}')
+        logging.info(f'Service not exist. Create service: {SERVICE_NAME}. Master is {redis_master_name}')
         service_metadata = client.V1ObjectMeta(name=SERVICE_NAME)
         service_spec = client.V1ServiceSpec(type="ExternalName", external_name=redis_master_name)
         service_body = client.V1Service(
@@ -64,7 +64,7 @@ while True:
         continue
 
     if redis_master_name != external_name:
-        logging.info(f'Update service {SERVICE_NAME}')
+        logging.info(f'Detected new master - {redis_master_name}. Update service {SERVICE_NAME}')
         service_metadata = client.V1ObjectMeta(name=SERVICE_NAME)
         service_spec = client.V1ServiceSpec(type="ExternalName", external_name=redis_master_name)
         service_body = client.V1Service(
@@ -78,11 +78,4 @@ while True:
         except Exception as e:
             logging.info(e)
 
-    sleep (20)
-
-
-
-# redis_master_name = "redis-bitnami-node-1.redis-bitnami-headless.test.svc.cluster.local"
-# namespace = "test"
-# service_name = "redis-bitnami-master"
-
+    sleep (SLEEP_TIME)
