@@ -1,0 +1,8 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: redis-bitnami-master
+  namespace: test
+spec:
+  type: ExternalName
+  externalName: redis-bitnami-node-1.redis-bitnami-headless.test.svc.cluster.local
